@@ -1,0 +1,131 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{cite}
+\usepackage{bm}  % for bold math symbols
+\geometry{margin=1in}
+
+\title{Adaptive Quadrotor Control via Contraction Theory}
+\author{Research Project for Prof. Jean-Jacques Slotine's Robotics Course 2.165 MIT}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+Autonomous quadcopters are increasingly being used to deliver packages or fly at high altitudes. These new applications are challenging, as critical parameters such as the weight and inertia of the drone or the density of the air change during the flight. To tackle these challenges, an adaptive controller must be designed that estimates these parameters while flying.
+Contraction theory offers an elegant way of solving this nonlinear control problem. Rather than proving convergence to an equilibrium, contraction establishes that trajectories of a contracting system converge exponentially to each other \cite{lohmiller1998contraction}. This enables verification through matrix inequalities rather than Lyapunov function construction. The theory behind this control law was presented in \cite{lopez2020contraction}.
+Here we provide a summary of the control law and its application to quadrotor trajectory tracking. All the code to apply this control law in a simulation can be found on [github repository]. 
+\section{Dynamics}
+The Dynamics of the Drone are non-linear. 
+\subsubsection{State definition}
+We consider a quadrotor in 3D space with the following 12-state vector:
+\begin{equation}
+\mathbf{x} = \begin{bmatrix}
+\mathbf{p} & \dot{\mathbf{p}}& \bm{\eta} & \bm{\omega}  
+\end{bmatrix}^\top
+\end{equation}
+where $\mathbf{p} = [x, y, z]^\top$ denotes position, $\dot{\mathbf{p}} = [\dot{x}, \dot{y}, \dot{z}]^\top$ is the velocity, $\bm{\eta} = [\phi, \theta, \psi]^\top$ represents Euler angles (roll, pitch, yaw) and $\bm{\omega} = [\omega_x, \omega_y, \omega_z]^\top$ is the body-frame angular velocity.
+
+\subsubsection{Translational Dynamics}
+The translational dynamics in the world frame are:
+\begin{equation}
+m \ddot{\mathbf{p}} = \mathbf{R}(\bm{\eta}) \mathbf{F} - \mathbf{F}_g - \mathbf{F}_d
+\end{equation}
+where the forces are defined as:
+\begin{equation}
+\mathbf{F} = \begin{bmatrix} F_x \\ F_y \\ F_z \end{bmatrix}, \quad
+\mathbf{F}_g = \begin{bmatrix} 0 \\ 0 \\ mg \end{bmatrix}, \quad
+\mathbf{F}_d = \mathbf{D}\dot{\mathbf{p}}
+\end{equation}
+Here $m$ is the mass, $g$ is gravitational acceleration, and $\mathbf{D} = \text{diag}(d_x, d_y, d_z)$ is the drag coefficient matrix. The rotation matrix $\mathbf{R}(\bm{\eta}) \in SO(3)$ transforms body-frame forces to the world frame (ZYX Euler convention):
+\begin{equation}
+\mathbf{R}(\bm{\eta}) = \begin{bmatrix}
+c_\psi c_\theta & c_\psi s_\theta s_\phi - s_\psi c_\phi & c_\psi s_\theta c_\phi + s_\psi s_\phi \\
+s_\psi c_\theta & s_\psi s_\theta s_\phi + c_\psi c_\phi & s_\psi s_\theta c_\phi - c_\psi s_\phi \\
+-s_\theta & c_\theta s_\phi & c_\theta c_\phi
+\end{bmatrix}
+\end{equation}
+where $s_\alpha = \sin(\alpha)$ and $c_\alpha = \cos(\alpha)$.
+
+\subsubsection{Rotational Dynamics}
+The rotational dynamics in the body frame follow Euler's equation:
+\begin{equation}
+\label{eq:rotational}
+\mathbf{I}\dot{\bm{\omega}} = \bm{\tau} - \bm{\omega} \times (\mathbf{I}\bm{\omega})
+\end{equation}
+where $\mathbf{I} = \text{diag}(I_{xx}, I_{yy}, I_{zz})$ is the inertia matrix and $\bm{\tau} = [\tau_\phi, \tau_\theta, \tau_\psi]^\top$ are the control torques. Expanding the components:
+\begin{align}
+\dot{\omega}_x &= \frac{\tau_\phi + (I_{yy} - I_{zz})\omega_y\omega_z}{I_{xx}} \\
+\dot{\omega}_y &= \frac{\tau_\theta + (I_{zz} - I_{xx})\omega_z\omega_x}{I_{yy}} \\
+\dot{\omega}_z &= \frac{\tau_\psi + (I_{xx} - I_{yy})\omega_x\omega_y}{I_{zz}}
+\end{align}
+
+The relationship between Euler angle rates and body angular velocities is:
+\begin{equation}
+\begin{bmatrix} \dot{\phi} \\ \dot{\theta} \\ \dot{\psi} \end{bmatrix} = 
+\begin{bmatrix}
+1 & \sin\phi\tan\theta & \cos\phi\tan\theta \\
+0 & \cos\phi & -\sin\phi \\
+0 & \sin\phi\sec\theta & \cos\phi\sec\theta
+\end{bmatrix}
+\begin{bmatrix} \omega_x \\ \omega_y \\ \omega_z \end{bmatrix}
+\end{equation}
+
+\subsubsection{State-Space Form}
+The complete system can be written as:
+\begin{equation}
+\dot{\mathbf{x}} = f(\mathbf{x}, \bm{\theta}) + B(\mathbf{x})\mathbf{u}
+\end{equation}
+where $\mathbf{u} = [F, \tau_\phi, \tau_\theta, \tau_\psi]^\top$ is the control input vector, $\bm{\theta} = [m, d_x, d_y, d_z, I_{xx}, I_{yy}, I_{zz}]^\top$ contains uncertain parameters, and $B(\mathbf{x})$ is the input matrix.
+
+\subsection{Parameter Uncertainty}
+
+The uncertain parameters affect the dynamics as follows:
+\begin{itemize}
+    \item \textbf{Mass $m$:} Varies due to payload changes (e.g., package pickup/delivery) or component additions
+    \item \textbf{Drag coefficients $\mathbf{D}$:} Change with altitude (air density variation), configuration, or damage
+    \item \textbf{Inertia $\mathbf{I}$:} Affected by payload distribution or structural changes
+\end{itemize}
+
+These uncertainties are \textbf{matched}, meaning they enter the dynamics through the same channels as the control inputs. Mathematically, matched uncertainty allows us to write:
+\begin{equation}
+\dot{\mathbf{x}} = f_0(\mathbf{x}) + B(\mathbf{x})[\mathbf{u} + \bm{\varphi}(\mathbf{x})^\top \tilde{\bm{\theta}}]
+\end{equation}
+where $\tilde{\bm{\theta}} = \bm{\theta} - \hat{\bm{\theta}}$ is the parameter error and the uncertainty $\bm{\varphi}(\mathbf{x})^\top \tilde{\bm{\theta}}$ enters through the same input matrix $B(\mathbf{x})$ as the control $\mathbf{u}$. For our quadrotor, this holds because: (1) mass and drag uncertainties affect translational acceleration, which is directly controlled by thrust; (2) inertia uncertainties affect angular acceleration, which is directly controlled by torques. This matched structure is essential for contraction-based adaptive control, as it enables direct compensation through control action.
+
+\subsection{Contraction-Based Adaptive Control}
+
+Following \cite{lopez2020contraction}, the adaptive control law is:
+\begin{equation}
+\label{eq:control}
+\mathbf{u} = \hat{\mathbf{u}}_{ccm} + \bm{\varphi}(\mathbf{x})^\top \hat{\bm{\theta}} - \kappa \mathbf{b}(\mathbf{x})^\top M(\gamma(1)) \gamma_s(1) \|\bm{\varphi}(\mathbf{x})\|^2
+\end{equation}
+with parameter adaptation:
+\begin{equation}
+\label{eq:adaptation}
+\dot{\hat{\bm{\theta}}} = -\Gamma \bm{\varphi}(\mathbf{x}) B(\mathbf{x})^\top M(\gamma(1)) \gamma_s(1)
+\end{equation}
+where:
+\begin{itemize}
+    \item $\hat{\mathbf{u}}_{ccm}$ is the nominal contracting controller
+    \item $\hat{\bm{\theta}}$ are parameter estimates
+    \item $\bm{\varphi}(\mathbf{x})$ is the regressor matrix
+    \item $\Gamma = \text{diag}(\gamma_1, \ldots, \gamma_n) \succ 0$ are adaptation gains
+    \item $M(\mathbf{x})$ is the contraction metric
+    \item $\gamma_s(1)$ is the tangent to the geodesic at the current state
+    \item $\kappa \geq 0$ is a robustness parameter
+\end{itemize}
+
+This controller guarantees exponential convergence of tracking errors with bounded transients under the contraction condition:
+\begin{equation}
+\mathbf{A}(\mathbf{x})^\top M + M\mathbf{A}(\mathbf{x}) + \dot{M} \preceq -2\lambda M
+\end{equation}
+for some $\lambda > 0$, where $\mathbf{A}(\mathbf{x}) = \frac{\partial f}{\partial \mathbf{x}}$ is the Jacobian.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
