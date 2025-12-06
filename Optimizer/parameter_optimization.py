@@ -15,7 +15,7 @@ from adaptive_controller import QuadcopterController
 
 
 class ParameterOptimizer:
-    def __init__(self, max_iterations=100, tau_max=1.5):
+    def __init__(self, max_iterations=100, tau_max=3.5):
         self.max_iterations = max_iterations
         self.iteration = 0
         self.best_cost = float('inf')
@@ -32,7 +32,7 @@ class ParameterOptimizer:
         # Weights for objective function
         self.w_tracking = 1.0      # Weight for tracking error
         self.w_control = 0.01      # Weight for control effort
-        self.w_oscillation = 0.05   # Weight for torque derivative (oscillations)
+        self.w_oscillation = 0.4   # Weight for torque derivative (oscillations)
 
     def get_target(self, t):
         """Target trajectory - straight line"""
@@ -58,7 +58,7 @@ class ParameterOptimizer:
             Kp_long, Kd_long, Kp_lat, Kd_lat, Kp_z, Kd_z, Kp_att, Kd_att = params
 
             # Create environment and controller with these parameters
-            env = environment(mass=1.2, Ixx=0.0081, Iyy=0.0081, Izz=0.0142)
+            env = environment(mass=1.2, Ixx=0.028, Iyy=0.028, Izz=0.055)
             controller = QuadcopterController(
                 mass=1.2, g=9.81,
                 Kp_long=Kp_long, Kd_long=Kd_long,
@@ -280,7 +280,7 @@ class ParameterOptimizer:
         params = self.best_params
         Kp_long, Kd_long, Kp_lat, Kd_lat, Kp_z, Kd_z, Kp_att, Kd_att = params
 
-        env = environment(mass=1.2, Ixx=0.0081, Iyy=0.0081, Izz=0.0142)
+        env = environment(mass=1.2, Ixx=0.028, Iyy=0.028, Izz=0.055)
         controller = QuadcopterController(
             mass=1.2, g=9.81,
             Kp_long=Kp_long, Kd_long=Kd_long,
@@ -460,5 +460,5 @@ class ParameterOptimizer:
 
 if __name__ == "__main__":
     # tau_max should match the controller's default value
-    optimizer = ParameterOptimizer(max_iterations=100, tau_max=1.5)
+    optimizer = ParameterOptimizer(max_iterations=100, tau_max=3.5)
     optimal_params, optimal_cost = optimizer.optimize()

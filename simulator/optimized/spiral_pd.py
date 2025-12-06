@@ -1,9 +1,15 @@
+'''
+3D spiral trajectory simulator with varying speed for quadcopter.
+The drone follows an ascending spiral path with sinusoidally varying forward, angular, and climb speeds
+to test controller performance on dynamic curved trajectories.
+'''
+
 import numpy as np
 import sys
-sys.path.insert(0, '../environment')
-sys.path.insert(0, '../controller')
+sys.path.insert(0, '../../environment')
+sys.path.insert(0, '../../controller')
 from Quadcopter_Dynamics import environment
-from adaptive_controller import QuadcopterController
+from controller import QuadcopterController
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -14,7 +20,7 @@ class simulator:
         self.state[2] = 0.1
         self.dt = 0.01
         self.time_step = 0.0
-        self.max_time = 25
+        self.max_time = 50
         self.max_time_steps = int(self.max_time / self.dt)
 
         self.state_history = []
@@ -22,18 +28,53 @@ class simulator:
         self.time_history = []
         self.error_history = []
 
-        self.env = environment(mass=1.2, Ixx=0.0081, Iyy=0.0081, Izz=0.0142)
+        self.env = environment(mass=1.2, Ixx=0.028, Iyy=0.028, Izz=0.055)
         self.controller = QuadcopterController(mass=1.2, g=9.81)
 
     def get_target(self, t):
-        speed = 5.0
-        altitude = 3.0
+        # Base trajectory parameters
+        radius = 3.0                # Radius of spiral (m)
+        base_angular = 0.4          # Base angular frequency (rad/s)
+        base_climb = 0.2            # Base climb rate (m/s)
+        base_forward = 1.0          # Base forward speed (m/s)
+        z_start = 1.0               # Starting altitude (m)
+        speed_freq = 0.3            # Frequency of speed variation (rad/s)
 
-        x_d = speed * t
-        y_d = 0.0
-        z_d = altitude
+        # Compute angular phase (integral of angular_freq(t))
+        # angular_freq(t) = base_angular * (1 + 0.15 * sin(1.5 * speed_freq * t))
+        # integral = base_angular * t - (0.15 * base_angular / (1.5 * speed_freq)) * cos(1.5 * speed_freq * t) + C
+        ang_integral = base_angular * t - (0.15 * base_angular / (1.5 * speed_freq)) * (np.cos(1.5 * speed_freq * t) - 1.0)
+
+        # Position with varying speeds (integrated from velocity functions)
+        x_d = base_forward * (t - (0.2 / speed_freq) * (np.cos(speed_freq * t) - 1.0))
+        y_d = radius * np.cos(ang_integral)
+        z_d = z_start + base_climb * (t - (0.1 / (0.8 * speed_freq)) * (np.cos(0.8 * speed_freq * t) - 1.0))
 
         return np.array([x_d, y_d, z_d])
+
+    def get_target_velocity(self, t):
+        """Target velocity for 3D spiral with varying speed (derivative of position)"""
+        # Base trajectory parameters (must match get_target())
+        radius = 3.0
+        base_angular = 0.4
+        base_climb = 0.2
+        base_forward = 1.0
+        speed_freq = 0.3
+
+        # Time-varying speeds
+        forward_speed = base_forward * (1.0 + 0.2 * np.sin(speed_freq * t))
+        angular_freq = base_angular * (1.0 + 0.15 * np.sin(1.5 * speed_freq * t))
+        climb_rate = base_climb * (1.0 + 0.1 * np.sin(0.8 * speed_freq * t))
+
+        # Compute angular phase for derivative calculation
+        ang_integral = base_angular * t - (0.15 * base_angular / (1.5 * speed_freq)) * (np.cos(1.5 * speed_freq * t) - 1.0)
+
+        # Velocity is time derivative of position
+        vx_d = forward_speed
+        vy_d = -radius * angular_freq * np.sin(ang_integral)
+        vz_d = climb_rate
+
+        return np.array([vx_d, vy_d, vz_d])
 
     def get_error(self, target):
         error_x = target[0] - self.state[0]
@@ -134,7 +175,7 @@ class simulator:
         ax1.set_xlabel('X (m)')
         ax1.set_ylabel('Y (m)')
         ax1.set_zlabel('Z (m)')
-        ax1.set_title('3D Trajectory')
+        ax1.set_title('3D Spiral Trajectory with Varying Speed')
         ax1.legend()
         ax1.grid(True)
 
@@ -221,15 +262,16 @@ class simulator:
         ax9.grid(True)
 
         plt.tight_layout()
-        plt.savefig('straightline_results.png', dpi=300)
-        print(f"\nPlot saved: straightline_results.png")
+        plt.savefig('spiral_results.png', dpi=300)
+        print(f"\nPlot saved: spiral_results.png")
         plt.show()
 
     def simulation(self):
         for step in range(self.max_time_steps):
             target = self.get_target(self.time_step)
+            target_vel = self.get_target_velocity(self.time_step)
             print(target)
-            u = self.controller.controller(self.state, target)
+            u = self.controller.controller(self.state, target, target_vel, dt=self.dt)
             print('u',u)
             state_dot = self.env.step(self.state, u)
             print('state_dot:',state_dot)
