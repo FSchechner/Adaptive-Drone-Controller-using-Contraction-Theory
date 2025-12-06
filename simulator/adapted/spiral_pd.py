@@ -28,7 +28,7 @@ class simulator:
         self.time_history = []
         self.error_history = []
 
-        self.env = environment(mass=1.2, Ixx=0.055, Iyy=0.055, Izz=0.07)
+        self.env = environment(mass=1.2, Ixx=0.055, Iyy=0.055, Izz=0.7)
         self.controller = QuadcopterController(mass=1.2, g=9.81)
 
     def get_target(self, t):

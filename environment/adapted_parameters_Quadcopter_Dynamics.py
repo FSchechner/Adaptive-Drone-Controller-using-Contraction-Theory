@@ -1,7 +1,7 @@
 import numpy as np
 
 class environment:
-    def __init__(self, mass=1.2, Ixx=0.055, Iyy=0.055, Izz=0.07):
+    def __init__(self, mass=1.6, Ixx=0.055, Iyy=0.055, Izz=0.07):
         self.m = mass
         self.g = 9.81
         self.I = np.diag([Ixx, Iyy, Izz])
@@ -10,7 +10,7 @@ class environment:
         self.D = np.diag([0.1, 0.1, 0.15])
 
         # Rotational damping (aerodynamic drag on rotation)
-        self.D_rot = np.diag([0.004, 0.004, 0.5]) # 2x lower drag
+        self.D_rot = np.diag([0.004, 0.004, 0.05]) # 2x lower drag
 
         self.e_g = np.array([0, 0, -self.g])
 
