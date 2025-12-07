@@ -1,22 +1,20 @@
-Optimal Gamma Parameters for Adaptive Controller
-==================================================
+Optimal Gamma Parameters for Contraction Adaptive Controller
+============================================================
 
-Initial cost: 9.206689
-Final cost: 4.844283
-Improvement: 47.38%
+Initial cost: 3.804687
+Final cost: 2.853938
+Improvement: 24.99%
 
 Parameters:
-  gamma_m = 0.0420
-  gamma_I = 7.3491
+  gamma_alpha = 2.3711
+  gamma_dx = 0.0100
+  gamma_dy = 0.0100
+  gamma_dz = 1.0008
 
-To use in QuadcopterController:
-controller = QuadcopterController(
-    g=9.81,
-    Kp_long=1.6517, Kd_long=1.4134,
-    Kp_lat=0.2020, Kd_lat=0.9168,
-    Kp_z=4.2928, Kd_z=1.2188,
-    Kp_att=15.9895, Kd_att=2.0513,
-    max_tilt_deg=35.0,
-    gamma_m=0.0420,
-    gamma_I=7.3491
+To use in ContractionAdaptiveQuadController:
+controller = ContractionAdaptiveQuadController(
+    gamma_alpha=2.3711,
+    gamma_dx=0.0100,
+    gamma_dy=0.0100,
+    gamma_dz=1.0008
 )

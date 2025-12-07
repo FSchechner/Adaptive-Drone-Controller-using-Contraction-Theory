@@ -15,7 +15,7 @@ sys.path.insert(0, '../../environment')
 sys.path.insert(0, '../../controller')
 sys.path.insert(0,'../../Drone')
 from Quadcopter_Dynamics import environment
-from adaptive_controller import QuadcopterController
+from contraction_adaptive_controller import ContractionAdaptiveQuadController
 from Drone_1 import Drone
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -35,11 +35,11 @@ class simulator:
         self.error_history = []
         self.Drone = Drone()
         self.env = environment(mass= self.Drone.m, Ixx= self.Drone.Ixx, Iyy= self.Drone.Iyy, Izz= self.Drone.Izz)
-        self.controller = QuadcopterController(g=9.81)
+        self.controller = ContractionAdaptiveQuadController()
 
     def get_target(self, t):
         """
-        Moderate parcour with 5 sections:
+        Gentle 3D parcour with 5 sections:
         0-6s: Smooth slalom (gentle S-curves)
         6-12s: Circular climb (spiral up)
         12-18s: Figure-8 pattern at constant altitude
@@ -50,42 +50,42 @@ class simulator:
         # Section 1: Smooth Slalom (0-6s)
         if t < 6.0:
             # Gentle forward motion with smooth lateral weaving
-            gate_width = 2.5    # Lateral displacement (reduced)
-            slalom_freq = 0.5   # Gates per second (slower)
+            gate_width = 1.5    # Lateral displacement (gentle)
+            slalom_freq = 0.35  # Gates per second (slow)
 
-            x_d = 2.0 * t  # Constant forward speed 2 m/s
+            x_d = 1.0 * t  # Constant forward speed 1 m/s
             y_d = gate_width * np.sin(slalom_freq * np.pi * t)
-            z_d = 2.0 + 0.2 * t  # Gentle climb
+            z_d = 2.0 + 0.15 * t  # Very gentle climb
 
         # Section 2: Circular Climb (6-12s)
         elif t < 12.0:
             t_local = t - 6.0
-            radius = 3.0
-            omega = 0.6  # rad/s (moderate rotation)
+            radius = 2.0
+            omega = 0.4  # rad/s (gentle rotation)
 
-            x_d = 12.0 + radius * np.cos(omega * t_local)
+            x_d = 6.0 + radius * np.cos(omega * t_local)
             y_d = radius * np.sin(omega * t_local)
-            z_d = 3.2 + 0.3 * t_local  # Gradual climb
+            z_d = 2.9 + 0.2 * t_local  # Gentle climb
 
         # Section 3: Figure-8 Pattern (12-18s)
         elif t < 18.0:
             t_local = t - 12.0
-            omega = 0.5  # Angular frequency
-            radius_8 = 4.0
+            omega = 0.35  # Angular frequency (slower)
+            radius_8 = 2.5
 
-            x_d = 15.0 + radius_8 * np.sin(omega * t_local)
-            y_d = 2.0 * np.sin(2 * omega * t_local)  # Creates figure-8
-            z_d = 5.0  # Constant altitude
+            x_d = 8.0 + radius_8 * np.sin(omega * t_local)
+            y_d = 1.5 * np.sin(2 * omega * t_local)  # Creates figure-8
+            z_d = 4.1  # Constant altitude
 
         # Section 4: Straight Line with Speed Variation (18-24s)
         elif t < 24.0:
             t_local = t - 18.0
-            # Moderate speed variation
-            speed = 2.5 + 0.5 * np.sin(0.8 * t_local)  # 2-3 m/s
+            # Gentle speed variation
+            speed = 1.5 + 0.3 * np.sin(0.5 * t_local)  # 1.2-1.8 m/s
 
-            x_d = 15.0 + 2.5 * t_local + (0.5/0.8) * (1 - np.cos(0.8 * t_local))
-            y_d = 1.5 * np.sin(0.6 * t_local)  # Gentle sway
-            z_d = 5.0 + 0.8 * np.sin(t_local)  # Moderate altitude variation
+            x_d = 8.0 + 1.5 * t_local + (0.3/0.5) * (1 - np.cos(0.5 * t_local))
+            y_d = 1.0 * np.sin(0.4 * t_local)  # Gentle sway
+            z_d = 4.1 + 0.4 * np.sin(0.7 * t_local)  # Gentle altitude variation
 
         # Section 5: Descending Arc to Hover (24-30s)
         else:
@@ -93,9 +93,9 @@ class simulator:
             # Smooth descent and deceleration
             decay = np.exp(-0.5 * t_local)
 
-            x_d = 30.0 + 3.0 * decay
-            y_d = 2.0 * decay * np.sin(0.6 * 24.0)
-            z_d = 5.0 - 2.0 * (1 - decay)  # Descend to 3m
+            x_d = 17.0 + 2.0 * decay
+            y_d = 1.0 * decay * np.sin(0.4 * 24.0)
+            z_d = 4.1 - 1.6 * (1 - decay)  # Descend to 2.5m
 
         return np.array([x_d, y_d, z_d])
 
@@ -198,7 +198,7 @@ class simulator:
         ax1.set_xlabel('X (m)')
         ax1.set_ylabel('Y (m)')
         ax1.set_zlabel('Z (m)')
-        ax1.set_title('3D Aggressive Parcour - Position Tracking')
+        ax1.set_title('3D Gentle Parcour - Position Tracking')
         ax1.legend()
         ax1.grid(True)
 
@@ -322,4 +322,3 @@ if __name__ == "__main__":
     print(f"\nSimulation completed: {len(time)} data points")
     sim.print_results()
     sim.plot_results()
-    sim.controller.plot_estimates('adaptation_results.png')

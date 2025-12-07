@@ -6,7 +6,7 @@ sys.path.insert(0, '../controller')
 sys.path.insert(0,'../Drone')
 
 from Quadcopter_Dynamics import environment
-from adaptive_controller import QuadcopterController
+from contraction_adaptive_controller import ContractionAdaptiveQuadController
 from Drone_1 import Drone_with_Package
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -62,19 +62,15 @@ class GammaOptimizer:
 
     def run_simulation(self, params):
         try:
-            gamma_m, gamma_I = params
+            gamma_alpha, gamma_dx, gamma_dy, gamma_dz = params
 
             drone = Drone_with_Package()
             env = environment(mass=drone.m, Ixx=drone.Ixx, Iyy=drone.Iyy, Izz=drone.Izz)
-            controller = QuadcopterController(
-                g=9.81,
-                Kp_long=1.6517, Kd_long=1.4134,
-                Kp_lat=0.2020, Kd_lat=0.9168,
-                Kp_z=4.2928, Kd_z=1.2188,
-                Kp_att=15.9895, Kd_att=2.0513,
-                max_tilt_deg=35.0,
-                gamma_m=gamma_m,
-                gamma_I=gamma_I
+            controller = ContractionAdaptiveQuadController(
+                gamma_alpha=gamma_alpha,
+                gamma_dx=gamma_dx,
+                gamma_dy=gamma_dy,
+                gamma_dz=gamma_dz
             )
 
             state = np.zeros(12)
@@ -82,11 +78,10 @@ class GammaOptimizer:
 
             tracking_errors = []
             mass_errors = []
-            inertia_errors = []
             param_derivatives = []
 
             time_step = 0.0
-            a_prev = controller.a.copy()
+            theta_prev = controller.theta_hat.copy()
             for step in range(self.max_time_steps):
                 target = self.get_target(time_step)
                 u = controller.controller(state, target, dt=self.dt)
@@ -97,18 +92,14 @@ class GammaOptimizer:
                 tracking_error = np.linalg.norm(error)
                 tracking_errors.append(tracking_error)
 
-                m_error = abs(controller.m_hat - drone.m) / drone.m
+                m_error = abs(controller.theta_hat[0] - 1.0/drone.m) / (1.0/drone.m)
                 mass_errors.append(m_error)
 
-                I_true = np.array([drone.Ixx, drone.Iyy, drone.Izz])
-                I_error = np.linalg.norm(controller.I_hat - I_true) / np.linalg.norm(I_true)
-                inertia_errors.append(I_error)
-
                 if step > 0:
-                    a_change = controller.a - a_prev
-                    param_derivative = np.linalg.norm(a_change) / self.dt
+                    theta_change = controller.theta_hat - theta_prev
+                    param_derivative = np.linalg.norm(theta_change) / self.dt
                     param_derivatives.append(param_derivative)
-                a_prev = controller.a.copy()
+                theta_prev = controller.theta_hat.copy()
 
                 time_step += self.dt
 
@@ -118,8 +109,7 @@ class GammaOptimizer:
             rms_tracking = np.sqrt(np.mean(np.array(tracking_errors)**2))
 
             final_mass_error = mass_errors[-1]
-            final_inertia_error = inertia_errors[-1]
-            convergence_cost = final_mass_error + final_inertia_error
+            convergence_cost = final_mass_error
 
             mean_param_derivative = np.mean(param_derivatives) if param_derivatives else 0.0
 
@@ -140,7 +130,7 @@ class GammaOptimizer:
             self.best_cost = cost
             self.best_params = params.copy()
             print(f"Iteration {self.iteration}: New best cost = {cost:.6f}")
-            print(f"  gamma_m={params[0]:.4f}, gamma_I={params[1]:.4f}")
+            print(f"  gamma_alpha={params[0]:.4f}, gamma_dx={params[1]:.4f}, gamma_dy={params[2]:.4f}, gamma_dz={params[3]:.4f}")
         elif self.iteration % 5 == 0:
             print(f"Iteration {self.iteration}: cost = {cost:.6f}")
 
@@ -148,7 +138,7 @@ class GammaOptimizer:
 
     def optimize(self):
         print("="*70)
-        print("GAMMA PARAMETER OPTIMIZATION FOR ADAPTIVE CONTROLLER")
+        print("GAMMA PARAMETER OPTIMIZATION FOR CONTRACTION ADAPTIVE CONTROLLER")
         print("="*70)
         print(f"Max iterations: {self.max_iterations}")
         print(f"Simulation time: {self.max_time}s")
@@ -157,16 +147,20 @@ class GammaOptimizer:
         print(f"Oscillation weight: {self.w_oscillation}")
         print("="*70)
 
-        initial_params = np.array([0.5, 2.0])
+        initial_params = np.array([0.5, 0.5, 0.5, 0.5])
 
         bounds = [
-            (0.01, 5.0),
-            (0.1, 10.0)
+            (0.01, 5.0),   # gamma_alpha
+            (0.01, 5.0),   # gamma_dx
+            (0.01, 5.0),   # gamma_dy
+            (0.01, 5.0)    # gamma_dz
         ]
 
         print("\nInitial parameters:")
-        print(f"  gamma_m={initial_params[0]:.4f}")
-        print(f"  gamma_I={initial_params[1]:.4f}")
+        print(f"  gamma_alpha={initial_params[0]:.4f}")
+        print(f"  gamma_dx={initial_params[1]:.4f}")
+        print(f"  gamma_dy={initial_params[2]:.4f}")
+        print(f"  gamma_dz={initial_params[3]:.4f}")
 
         initial_cost = self.run_simulation(initial_params)
         print(f"\nInitial cost: {initial_cost:.6f}")
@@ -189,30 +183,30 @@ class GammaOptimizer:
         print(f"Total iterations: {self.iteration}")
         print(f"\nBest cost: {self.best_cost:.6f}")
         print("\nOptimal parameters:")
-        print(f"  gamma_m = {self.best_params[0]:.4f}")
-        print(f"  gamma_I = {self.best_params[1]:.4f}")
+        print(f"  gamma_alpha = {self.best_params[0]:.4f}")
+        print(f"  gamma_dx = {self.best_params[1]:.4f}")
+        print(f"  gamma_dy = {self.best_params[2]:.4f}")
+        print(f"  gamma_dz = {self.best_params[3]:.4f}")
         print(f"\nImprovement: {100 * (initial_cost - self.best_cost) / initial_cost:.2f}%")
         print("="*70)
 
         with open('optimal_gamma.txt', 'w') as f:
-            f.write("Optimal Gamma Parameters for Adaptive Controller\n")
-            f.write("="*50 + "\n\n")
+            f.write("Optimal Gamma Parameters for Contraction Adaptive Controller\n")
+            f.write("="*60 + "\n\n")
             f.write(f"Initial cost: {initial_cost:.6f}\n")
             f.write(f"Final cost: {self.best_cost:.6f}\n")
             f.write(f"Improvement: {100 * (initial_cost - self.best_cost) / initial_cost:.2f}%\n\n")
             f.write("Parameters:\n")
-            f.write(f"  gamma_m = {self.best_params[0]:.4f}\n")
-            f.write(f"  gamma_I = {self.best_params[1]:.4f}\n")
-            f.write("\nTo use in QuadcopterController:\n")
-            f.write(f"controller = QuadcopterController(\n")
-            f.write(f"    g=9.81,\n")
-            f.write(f"    Kp_long=1.6517, Kd_long=1.4134,\n")
-            f.write(f"    Kp_lat=0.2020, Kd_lat=0.9168,\n")
-            f.write(f"    Kp_z=4.2928, Kd_z=1.2188,\n")
-            f.write(f"    Kp_att=15.9895, Kd_att=2.0513,\n")
-            f.write(f"    max_tilt_deg=35.0,\n")
-            f.write(f"    gamma_m={self.best_params[0]:.4f},\n")
-            f.write(f"    gamma_I={self.best_params[1]:.4f}\n")
+            f.write(f"  gamma_alpha = {self.best_params[0]:.4f}\n")
+            f.write(f"  gamma_dx = {self.best_params[1]:.4f}\n")
+            f.write(f"  gamma_dy = {self.best_params[2]:.4f}\n")
+            f.write(f"  gamma_dz = {self.best_params[3]:.4f}\n")
+            f.write("\nTo use in ContractionAdaptiveQuadController:\n")
+            f.write(f"controller = ContractionAdaptiveQuadController(\n")
+            f.write(f"    gamma_alpha={self.best_params[0]:.4f},\n")
+            f.write(f"    gamma_dx={self.best_params[1]:.4f},\n")
+            f.write(f"    gamma_dy={self.best_params[2]:.4f},\n")
+            f.write(f"    gamma_dz={self.best_params[3]:.4f}\n")
             f.write(f")\n")
 
         print("\nResults saved to: optimal_gamma.txt")
@@ -223,19 +217,15 @@ class GammaOptimizer:
         return self.best_params, self.best_cost
 
     def plot_best_result(self):
-        gamma_m, gamma_I = self.best_params
+        gamma_alpha, gamma_dx, gamma_dy, gamma_dz = self.best_params
 
         drone = Drone_with_Package()
         env = environment(mass=drone.m, Ixx=drone.Ixx, Iyy=drone.Iyy, Izz=drone.Izz)
-        controller = QuadcopterController(
-            g=9.81,
-            Kp_long=1.6517, Kd_long=1.4134,
-            Kp_lat=0.2020, Kd_lat=0.9168,
-            Kp_z=4.2928, Kd_z=1.2188,
-            Kp_att=15.9895, Kd_att=2.0513,
-            max_tilt_deg=35.0,
-            gamma_m=gamma_m,
-            gamma_I=gamma_I
+        controller = ContractionAdaptiveQuadController(
+            gamma_alpha=gamma_alpha,
+            gamma_dx=gamma_dx,
+            gamma_dy=gamma_dy,
+            gamma_dz=gamma_dz
         )
 
         state = np.zeros(12)
@@ -336,18 +326,16 @@ class GammaOptimizer:
         ax4.grid(True)
 
         ax5 = fig.add_subplot(3, 3, 5)
-        I_xx_hist = np.array(controller.estimate_history['I_hat_x'])
-        I_yy_hist = np.array(controller.estimate_history['I_hat_y'])
-        I_zz_hist = np.array(controller.estimate_history['I_hat_z'])
-        ax5.plot(times, I_xx_hist, 'r-', linewidth=2, label='I_xx est')
-        ax5.plot(times, I_yy_hist, 'g-', linewidth=2, label='I_yy est')
-        ax5.plot(times, I_zz_hist, 'b-', linewidth=2, label='I_zz est')
-        ax5.axhline(y=drone.Ixx, color='r', linestyle='--', linewidth=1, alpha=0.7)
-        ax5.axhline(y=drone.Iyy, color='g', linestyle='--', linewidth=1, alpha=0.7)
-        ax5.axhline(y=drone.Izz, color='b', linestyle='--', linewidth=1, alpha=0.7)
+        d_x_hist = np.array(controller.estimate_history['d_hat_x'])
+        d_y_hist = np.array(controller.estimate_history['d_hat_y'])
+        d_z_hist = np.array(controller.estimate_history['d_hat_z'])
+        ax5.plot(times, d_x_hist, 'r-', linewidth=2, label='d_x')
+        ax5.plot(times, d_y_hist, 'g-', linewidth=2, label='d_y')
+        ax5.plot(times, d_z_hist, 'b-', linewidth=2, label='d_z')
+        ax5.axhline(y=0, color='k', linestyle='--', linewidth=1, alpha=0.3)
         ax5.set_xlabel('Time (s)')
-        ax5.set_ylabel('Inertia (kg·m²)')
-        ax5.set_title('Inertia Adaptation')
+        ax5.set_ylabel('Disturbance (m/s²)')
+        ax5.set_title('Disturbance Adaptation')
         ax5.legend()
         ax5.grid(True)
 
