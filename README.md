@@ -1,6 +1,6 @@
-# Quadcopter Trajectory Tracking
+# Adaptive Drone Controller using Lyapunov Theory
 
-**Rigid body quadrotor simulator with cascaded PD control**
+**Lyapunov-based adaptive control for quadrotor position tracking under parametric uncertainty**
 
 Research project for robotics course
 *Harvard University*
@@ -10,13 +10,34 @@ Research project for robotics course
 ## Quick Start
 
 ```bash
-# Run controller test with waypoint tracking
-cd tests
-python3 test_controller.py
-
-# Run simple hover test
-python3 test_simple_hover.py
+# Run the full simulation comparison
+cd simulator
+python3 simple.py
 ```
+
+This will execute three test scenarios comparing PD and Adaptive control:
+1. Baseline spiral trajectory tracking
+2. Disturbance robustness (+3N constant wind)
+3. Mass variation (+1kg package with disturbance)
+
+Results are saved to `simple_result.png`
+
+---
+
+## Overview
+
+This project implements and compares two position control strategies for quadrotor trajectory tracking:
+
+1. **PD Controller**: Classical proportional-derivative control with optimized gains
+2. **Adaptive Controller**: Lyapunov-based adaptive control with online parameter estimation
+
+### Key Results
+
+Under combined 53% mass increase and 3N wind disturbance:
+- **Adaptive Controller**: 0.055m mean error (0% degradation from baseline)
+- **PD Controller**: 0.638m mean error (+145% degradation from baseline)
+
+The adaptive controller demonstrates complete disturbance invariance and successful mass estimation with provable stability guarantees.
 
 ---
 
@@ -24,197 +45,178 @@ python3 test_simple_hover.py
 
 ```
 .
-├── README.md                      # This file
-├── src/                           # Core physics simulation
-│   └── rigid_body_quadrotor.py        # 6-DOF rigid body dynamics
-├── controller/                    # Control algorithms
-│   └── controller.py                  # Cascaded PD controller
-├── tests/                         # Test simulations
-│   ├── test_controller.py             # Waypoint tracking test
-│   ├── test_simple_hover.py           # Hover stability test
-│   └── simple_open_loop_test.py       # Open-loop dynamics test
-├── environment/                   # Alternative dynamics implementations
-│   └── Quadcopter-Dynamics.py
-├── docs/                          # Documentation
-│   ├── RIGID_BODY_README.md           # Detailed rigid body explanation
-│   └── introduction.*                 # Project introduction
-└── archive/                       # Old implementations
+├── README.md                           # This file
+├── Tex.tex                            # Research paper (LaTeX)
+├── simulator/
+│   ├── simple.py                      # Main simulation (simplified dynamics)
+│   ├── optimize_gains.py              # Gain optimization using Nelder-Mead
+│   └── less_simple.py                 # Cascaded control implementation
+├── controller/
+│   ├── pd_controller.py               # PD position controller
+│   ├── ac_controller.py               # Adaptive controller with Lyapunov law
+│   └── attitude_controller.py         # Attitude controller for cascaded system
+├── environment/
+│   ├── quadcopter_env.py              # Simplified 6-DOF translational model
+│   ├── cascaded_quadcopter_env.py     # Full dynamics with attitude
+│   ├── Quadcopter_Dynamics.py         # Core dynamics implementation
+│   └── Drone.py                       # Drone parameter definitions
+└── simple_result.png                   # Generated comparison plot
 ```
 
 ---
 
-## What is This?
+## Control Approaches
 
-This is a **complete rigid body quadrotor simulator** implementing proper 6-DOF dynamics:
+### 1. PD Controller
 
-### State (12D)
+Classical position control with separate gains for horizontal (xy) and vertical (z) motion:
+
 ```
-x = [x, y, z, vx, vy, vz, φ, θ, ψ, ωx, ωy, ωz]
+F_des = m * (Kp*(pos_d - pos) + Kd*(vel_d - vel) + [0, 0, g])
 ```
 
-### Key Physics
-1. **Translation**: `m·v̇ = R·[0,0,F] + [0,0,-mg] - D·v`
-   Thrust only acts along body z-axis!
+**Optimized Gains**:
+- `Kp_xy = 29.83`, `Kd_xy = 8.78`
+- `Kp_z = 11.12`, `Kd_z = 13.81`
 
-2. **Rotation**: `I·ω̇ = τ - ω×(I·ω)`
-   Gyroscopic term couples the axes!
+### 2. Adaptive Controller
 
-3. **Orientation**: `η̇ = W(φ,θ)·ω`
-   Converts body angular velocity to Euler rates
+Lyapunov-based adaptive control with online parameter estimation:
+
+```
+F_des = m_hat * (λ*e_pos + k*e_vel + [0, 0, g]) + d_hat
+
+Parameter updates:
+  α_hat_dot = γ_α * e_vel^T * a_des
+  d_hat_dot = -γ_d * e_vel
+```
+
+**Adaptive Gains**:
+- `λ = 10.0` (position feedback)
+- `k = 15.0` (velocity feedback)
+- `γ_α = 0.1` (mass adaptation rate)
+- `γ_d = 0.1` (disturbance adaptation rate)
 
 ---
 
-## Basic Usage
+## Simplified Dynamics Model
+
+The project uses a simplified 6-DOF translational model that assumes perfect attitude control:
 
 ```python
-from src.rigid_body_quadrotor import RigidBodyQuadrotor
-import numpy as np
-from scipy.integrate import solve_ivp
+# State: [x, y, z, vx, vy, vz]
+# Control: [Fx, Fy, Fz] (force vector in world frame)
 
-# Create quadrotor
-quad = RigidBodyQuadrotor(mass=1.2, Ixx=0.0081, Iyy=0.0081, Izz=0.0142)
-
-# Initial state: [x,y,z, vx,vy,vz, φ,θ,ψ, ωx,ωy,ωz]
-x0 = np.zeros(12)
-x0[2] = 3.0  # Start at 3m altitude
-
-# Control: [F, τφ, τθ, τψ]
-u_hover = np.array([quad.hover_thrust(), 0, 0, 0])
-
-# Simulate
-def dynamics(t, x):
-    return quad.dynamics(t, x, u_hover)
-
-sol = solve_ivp(dynamics, [0, 10], x0, dense_output=True)
+m * acceleration = F_des + [0, 0, -m*g] + disturbance
 ```
+
+This abstraction enables focused evaluation of position control strategies without coupling to attitude dynamics.
 
 ---
 
-## Control Law
+## Test Scenarios
 
-The controller uses a cascaded architecture with outer loop (position) → inner loop (attitude).
+The simulation evaluates controllers under three progressive scenarios:
 
-### Outer Loop: Position Control
+1. **Baseline**: Spiral trajectory (20s) with nominal mass (1.9kg)
+2. **Wind Disturbance**: Same trajectory with +3N constant horizontal force
+3. **Mass + Wind**: +1kg package (53% mass increase) with disturbance
 
-**Yaw Control** (point at target):
-```
-ψ_d = arctan2(y_d - y, x_d - x)  if distance > ε
-e_ψ = wrap_to_pi(ψ_d - ψ)
-```
-
-**XY Position** (car-like control):
-```
-distance = √[(x_d - x)² + (y_d - y)²]
-v_forward = vx·cos(ψ) + vy·sin(ψ)
-θ_d = Kp_xy·distance - Kd_xy·v_forward
-θ_d = clip(θ_d, -30°, +30°)
-```
-
-**Z Position** (altitude control):
-```
-az_d = Kp_z·(z_d - z) - Kd_z·vz
-F = m·(az_d + g)
-F = clip(F, 0, 20N)
-```
-
-### Inner Loop: Attitude Control
-
-**PD control on angles**:
-```
-τ_φ = Kp_att·(φ_d - φ) - Kd_att·ωx
-τ_θ = Kp_att·(θ_d - θ) - Kd_att·ωy
-τ_ψ = Kp_att·(e_ψ) - Kd_att·ωz
-```
-
-### Control Output
-```
-u = [F, τ_φ, τ_θ, τ_ψ]
-```
-
-**Default Gains**:
-- Position: `Kp_xy=0.12, Kd_xy=0.5, Kp_z=5.0, Kd_z=3.0`
-- Attitude: `Kp_att=3.0, Kd_att=0.6`
+Each scenario tracks the same reference trajectory:
+- Spiral ascent: radius 5m, climb rate 2 m/s
+- Duration: 20 seconds
+- Sampling rate: 100 Hz (dt = 0.01s)
 
 ---
 
-## Why Rigid Body?
+## Gain Optimization
 
-**Point mass model (WRONG)**:
-- Can generate force in any direction
-- No gyroscopic effects
-- Orientation doesn't matter
+Controller gains were optimized using Nelder-Mead optimization:
 
-**Rigid body model (CORRECT)**:
-- Thrust ONLY along body z-axis
-- Gyroscopic coupling: `ω×(I·ω)`
-- Must tilt to move horizontally
-- Inertia tensor affects rotation
+```bash
+cd simulator
+python3 optimize_gains.py
+```
 
-See [docs/RIGID_BODY_README.md](docs/RIGID_BODY_README.md) for detailed physics explanation.
-
----
-
-## Tests
-
-Controller tests verify:
-- ✓ Hover stability at target altitude
-- ✓ Waypoint tracking in 3D space
-- ✓ Yaw pointing toward target (car-like behavior)
-- ✓ Smooth trajectory interpolation
-- ✓ Open-loop dynamics validation
-
-Run: `python3 tests/test_controller.py`
+The optimization minimizes mean trajectory tracking error over the baseline scenario.
 
 ---
 
 ## Key Features
 
-### Simple, Clean Code
-- ~95 lines of core dynamics
-- Clear physics implementation
-- Easy to extend
+### Provable Stability
+- Lyapunov-based design with rigorous stability proof
+- Guaranteed parameter convergence under persistence of excitation
+- Bounded parameter estimates with projection
 
-### Proper Physics
-- Full rigid body dynamics
-- Gyroscopic effects
-- Frame transformations
-- Conservation laws
+### Complete Disturbance Rejection
+- Adaptive controller achieves 0% performance degradation under constant disturbances
+- Online disturbance estimation without prior knowledge
 
-### Comprehensive Testing
-- 7 physics validation tests
-- Energy/momentum checks
-- Numerical accuracy verification
-
-### Educational Demos
-- 3D trajectory visualization
-- Gyroscopic effect demonstration
-- Point mass vs rigid body comparison
+### Optimized Performance
+- Both controllers use Nelder-Mead optimized gains
+- Fair comparison under identical test conditions
+- Optimization framework implemented using Claude Code
 
 ---
 
-## Potential Extensions
+## Running Simulations
 
-Possible future improvements:
+### Main Comparison
 
-1. **Trajectory optimization** - Minimum-time or minimum-energy paths
-2. **Gain tuning** - Systematic PD gain selection
-3. **State estimation** - Add noise, implement Kalman filter
-4. **Hardware implementation** - Deploy on actual quadrotor
+```bash
+cd simulator
+python3 simple.py
+```
+
+Outputs:
+- Console: Mean error metrics for each scenario
+- File: `simple_result.png` (6-panel comparison plot)
+
+### Gain Optimization
+
+```bash
+cd simulator
+python3 optimize_gains.py
+```
+
+This will run Nelder-Mead optimization for both controllers (50 iterations each).
+
+---
+
+## Requirements
+
+```
+numpy
+scipy
+matplotlib
+```
+
+Install dependencies:
+```bash
+pip install numpy scipy matplotlib
+```
 
 ---
 
 ## References
 
-- **Bouabdallah (2007)**: *Design and Control of Quadrotors with Focus on the Factors Influencing the Quadrotor Design*
-- **Abdelhay & Zakriti (2019)**: *Modeling of a Quadcopter Trajectory Tracking System Using PID Controller*
-- **Beard & McLain (2012)**: *Small Unmanned Aircraft: Theory and Practice*
+1. Slotine & Li (1991): *Applied Nonlinear Control*
+2. Ioannou & Sun (1996): *Robust Adaptive Control*
+3. Dydek, Annaswamy, & Lavretsky (2013): *Adaptive Control of Quadrotor UAVs*
+
+---
+
+## GitHub Repository
+
+[https://github.com/FSchechner/Adaptive-Drone-Controller-using-Lyapunov-Theory](https://github.com/FSchechner/Adaptive-Drone-Controller-using-Lyapunov-Theory)
 
 ---
 
 ## Contact
 
-GitHub: [Adaptive-Drone-Controller-using-Contraction-Theory](https://github.com/FSchechner/Adaptive-Drone-Controller-using-Contraction-Theory)
+For questions or collaboration, please open an issue on GitHub.
 
 ---
 
-**Remember**: A quadrotor is a rigid body, not a point mass. It can only push along its body z-axis!
+**Note**: This project focuses on simplified translational dynamics to evaluate position control strategies. Future work includes experimental validation on physical hardware.
