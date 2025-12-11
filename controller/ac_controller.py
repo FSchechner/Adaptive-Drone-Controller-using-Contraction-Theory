@@ -1,24 +1,28 @@
 import numpy as np
 
-
+## I used Claude Code for comments and debugging 
 class AdaptiveController:
     def __init__(self,
                  m_nominal=1.9,
                  g=9.81,
-                 # Robust-oriented defaults (heavy + wind) while avoiding estimator drift
-                 # Robust-biased defaults (heavier + wind)
-                 lambda_xy=6.0,
-                 lambda_z=12.0,
-                 k_xy=18.0,
+                 # Defaults set to tuned values (Powell search)
+                 lambda_xy=3.6197,
+                 lambda_z=10.0,
+                 k_xy=14.9999,
                  k_z=15.0,
-                 gamma_alpha=4.0,
-                 gamma_d=0.3,
-                 alpha_min=0.2,
-                 alpha_max=2.0,
+                 gamma_alpha=0.3038,
+                 gamma_d=0.1,
+                 alpha_min=0.05,
+                 alpha_max=1.0,
                  d_max=20.0,
                  F_max=60.0,
                  dt=0.01):
 
+
+ 
+
+  
+  
         self.m_nominal = m_nominal  # nominal mass used to seed α̂
         self.g = g  # gravity constant in the model
         self.dt = dt  # integration step (passed through the sim)

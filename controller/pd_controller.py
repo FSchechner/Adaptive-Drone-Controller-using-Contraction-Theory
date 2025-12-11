@@ -3,12 +3,12 @@ class PDController:
     def __init__(self,
                  m_nominal=1.9,
                  g=9.81,
-                 Kp_xy=30.0,  # Optimized (Powell) for simplified dynamics
-                 Kd_xy=8.6398,
-                 Kp_z=30.0,
-                 Ki_xy=0.0,
-                 Ki_z=0.0699,
-                 Kd_z=8.5386,
+                 Kp_xy=49.9987,  # Updated tuned gains
+                 Kd_xy=12.5253,
+                 Kp_z=50.0,
+                 Ki_xy=0.0001,
+                 Ki_z=0.0197,
+                 Kd_z=11.4579,
                  dt=0.01):
     
         self.m_nominal = m_nominal  # nominal mass m_nom in Eq. (pid_force)

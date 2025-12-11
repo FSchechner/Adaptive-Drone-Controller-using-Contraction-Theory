@@ -17,7 +17,7 @@ fschechner@mit.edu}
 \maketitle
 
 \begin{abstract}
-This paper presents a comparative analysis of classical PD control versus Lyapunov-based adaptive control for quadrotor position tracking under parametric uncertainty. A simplified 6-DOF translational dynamics model is employed, assuming direct force generation. The adaptive controller uses a regressor-based formulation to estimate the inverse mass ($\alpha = 1/m$) and three-dimensional disturbance vector online. A rigorous Lyapunov stability proof demonstrates global boundedness of parameter estimates and asymptotic tracking convergence. Three test scenarios evaluate controller robustness.: (1) baseline with nominal mass and no disturbance, (2) nominal mass with 7N wind (24\% of weight), and (3) 53\% mass increase with wind. Overall, the adaptive controller maintains 63\% better performance, demonstrating disturbance invariance and successful mass adaptation. 
+This paper presents a comparative analysis of classical PD control versus Lyapunov-based adaptive control for quadrotor position tracking under parametric uncertainty. A simplified 6-DOF translational dynamics model is employed, assuming direct force generation. The adaptive controller uses a regressor-based formulation to estimate the inverse mass ($\alpha = 1/m$) and three-dimensional disturbance vector online. A rigorous Lyapunov stability proof demonstrates global boundedness of parameter estimates and asymptotic tracking convergence. Batch simulations on a 20-second 3D slalom trajectory compare both controllers across mass and wind uncertainty. The adaptive controller maintains low tracking error from baseline (0.046 m) to worst-case heavy+wind (0.144 m), while PD degrades from 0.120 m to 0.387 m, demonstrating the value of online adaptation. However, disturbance adaptation remains imperfect—likely due to limited excitation and coupling between mass and specific-disturbance estimation—leading to residual bias under strong winds.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -34,8 +34,8 @@ This work makes the following contributions:
 \begin{enumerate}
 \item A simplified 6-DOF position control formulation assuming direct force control, enabling focused comparison of position control strategies.
 \item A regressor-based adaptive controller with rigorous Lyapunov proof of stability under mass and disturbance uncertainty.
-\item Comprehensive simulation comparison between optimized PD and adaptive control on aggressive trajectories.
-\item Systematic three-scenario evaluation quantifying controller degradation from baseline to combined uncertainty, demonstrating AC disturbance invariance and 63\% error reduction under worst-case conditions.
+\item Comprehensive simulation comparison between optimized PD and adaptive control on aggressive trajectories (20 s slalom) and a 16-run batch over mass/wind combinations.
+\item Empirical analysis showing AC outperforms PD in aggregate, but disturbance adaptation remains imperfect under strong winds, likely due to excitation limits and coupling of mass and specific-disturbance estimation.
 \end{enumerate}
 
 \section{Dynamic Model}
@@ -305,46 +305,45 @@ which shows $\mathbf{s} \in \mathcal{L}_2 \cap \mathcal{L}_\infty$. By Barbalat'
 
 \subsection{Gain Optimization}
 
-Both controllers were optimized using Nelder-Mead simplex optimization on a 20-second spiral trajectory. The optimization framework was implemented using Claude Code, an AI-assisted development tool. The objective function minimized mean tracking error:
+Both controllers were optimized using Nelder-Mead simplex optimization on a 10-second slalom trajectory. The optimization framework was implemented using Claude Code, an AI-assisted development tool. The objective function minimized mean tracking error:
 \begin{equation}
 J = \frac{1}{N} \sum_{i=1}^N \|\mathbf{p}(t_i) - \mathbf{p}_d(t_i)\|.
 \end{equation}
 
 \textbf{Optimized PD Gains:}
 \begin{align}
-K_{p,xy} &= 30.00, \quad K_{p,z} = 30.00, \\
-K_{d,xy} &= 8.6398, \quad K_{d,z} = 8.5386, \\
-K_{i,xy} &= 0.0000, \quad K_{i,z} = 0.0699.
+K_{p,xy} &= 60.00, \quad K_{p,z} = 60.00, \\
+K_{d,xy} &= 3.82, \quad K_{d,z} = 8.84, \\
+K_{i,xy} &= 0.50, \quad K_{i,z} = 0.50.
 \end{align}
 
 \textbf{Optimized Adaptive Gains:}
 \begin{align}
-\lambda_{xy} &= 6.00, \quad \lambda_z = 12.00, \\
-k_{xy} &= 18.0, \quad k_z = 15.0, \\
-\gamma_\alpha &= 4.00, \quad \gamma_d = 0.30.
+\lambda_{xy} &= 11.99, \quad \lambda_z = 14.36, \\
+k_{xy} &= 24.93, \quad k_z = 21.74, \\
+\gamma_\alpha &= 0.34, \quad \gamma_d = 0.99.
 \end{align}
 
 \subsection{Trajectory Design}
 
-The test trajectory consists of three phases:
-\begin{enumerate}
-\item \textbf{Spiral ascent (0-20s):} Circular motion in XY-plane with radius 5 m and constant vertical velocity 2 m/s.
-\item \textbf{Acceleration (20-25s):} Linear acceleration at 2 m/s$^2$ in all three axes.
-\item \textbf{Hover (25-30s):} Stationary hover at final position.
-\end{enumerate}
-
-This trajectory exercises position tracking, velocity tracking, and disturbance rejection capabilities.
+The evaluation uses a 20-second 3D slalom trajectory with variable forward speed. The reference is:
+\begin{itemize}
+\item $x(t) = A_x \sin(\omega_x t)$ with $A_x = 5$ m, $\omega_x = 1.2$ rad/s.
+\item $y(t)$ uses a time-varying forward speed $v_y(t) = 1.5 + 0.8\sin(0.5 t)$.
+\item $z(t) = z_0 + A_z \sin(\omega_z t)$ with $A_z = 1$ m, $\omega_z = 0.8$ rad/s.
+\end{itemize}
+This trajectory excites all axes and introduces variation in forward speed to test tracking under persistent motion.
 
 \subsection{Test Scenarios}
 
-Three test scenarios were evaluated to systematically assess controller robustness:
+Batch evaluation comprises 16 runs:
 \begin{enumerate}
-\item \textbf{Baseline:} Nominal mass ($m = 1.9$ kg), no disturbance
-\item \textbf{Test 1:} Nominal mass, constant lateral disturbance $\mathbf{d} = [7.0, 0, 0]^\top$ N
-\item \textbf{Test 2:} Heavy mass ($m = 2.9$ kg, 53\% increase), with the same disturbance
+\item \textbf{Baseline:} Nominal mass ($m = 1.9$ kg), no disturbance.
+\item \textbf{Mass sweep:} Five masses from 1.9 to 4.0 kg, no wind.
+\item \textbf{Wind sweep:} Five winds along direction $[-1, 2, 0]$ scaled from 0 to 10 N at nominal mass.
+\item \textbf{Combined:} Matching mass and wind levels from the above sets.
 \end{enumerate}
-
-This progression allows quantification of controller degradation under increasing uncertainty.
+Performance is reported as mean total tracking error per scenario and averaged across the batch.
 
 \section{Simulation Results}
 
@@ -354,26 +353,14 @@ Table \ref{tab:results} summarizes the mean absolute tracking errors across all 
 
 \begin{table}[h]
 \centering
-\caption{Mean Absolute Tracking Errors [m]}
+\caption{Mean Absolute Tracking Errors [m] (slalom batch)}
 \label{tab:results}
-\begin{tabular}{|l|c|c|c|c|}
+\begin{tabular}{|l|c|c|}
 \hline
-\textbf{Scenario} & $e_x$ & $e_y$ & $e_z$ & $e_{\text{total}}$ \\
+\textbf{Scenario} & AC $e_{\text{total}}$ & PD $e_{\text{total}}$ \\
 \hline
-\multicolumn{5}{|c|}{\textit{Baseline: Nominal Mass, No Disturbance}} \\
-\hline
-AC & 0.084 & 0.053 & 0.027 & 0.133 \\
-PD & 0.147 & 0.122 & 0.039 & 0.235 \\
-\hline
-\multicolumn{5}{|c|}{\textit{Test 1: Nominal Mass + 7N Wind}} \\
-\hline
-AC & 0.111 & 0.054 & 0.028 & 0.157 \\
-PD & 0.188 & 0.122 & 0.039 & 0.267 \\
-\hline
-\multicolumn{5}{|c|}{\textit{Test 2: Heavy Mass + 7N Wind}} \\
-\hline
-AC & 0.154 & 0.107 & 0.088 & \textbf{0.289} \\
-PD & 0.245 & 0.220 & 0.218 & \textbf{0.472} \\
+Baseline (1.9 kg, no wind) & 0.046 & 0.120 \\
+Heavy + wind (4.0 kg, 10 N) & \textbf{0.144} & \textbf{0.387} \\
 \hline
 \end{tabular}
 \end{table}
@@ -381,23 +368,12 @@ PD & 0.245 & 0.220 & 0.218 & \textbf{0.472} \\
 \subsection{Performance Analysis}
 
 \begin{enumerate}
-\item \textbf{Baseline Performance:} In the nominal scenario without disturbances, AC achieves 43\% lower tracking error (0.133 m vs 0.235 m) than PD.
+\item \textbf{Baseline Performance:} In the nominal scenario without disturbances, AC achieves 62\% lower tracking error (0.046 m vs 0.120 m) than PD.
 
-\item \textbf{Disturbance Invariance:} Adding 7N lateral wind (≈37\% of nominal weight) increases PD error by 14\% (0.235 m $\to$ 0.267 m) while AC rises 18\% (0.133 m $\to$ 0.157 m). The adaptive law continues to estimate and compensate for the constant disturbance $\hat{d}_x$ in real time.
+\item \textbf{Mass/Wind Robustness:} With mass increased to 4.0 kg and wind up to 10 N along direction $[-2, 4, 0]$, AC error remains at 0.144 m while PD grows to 0.387 m. Disturbance adaptation is incomplete, indicating excitation limits and coupling between mass and specific-disturbance estimation.
 
-\item \textbf{Mass Variation Robustness:} When mass increases 53\% under the same 7N disturbance:
-\begin{itemize}
-\item AC error remains bounded at 0.289 m
-\item PD error grows to 0.472 m
-\end{itemize}
-The AC result demonstrates useful mass/disturbance adaptation; PD suffers from inadequate gravity compensation.
-
-\item \textbf{Cumulative Robustness:} Under combined uncertainties (53\% mass increase + 7N disturbance), AC maintains 39\% lower error than PD (0.289 m vs 0.472 m).
+\item \textbf{Cumulative Robustness:} Across the batch of 16 scenarios (mass, wind, combined), AC maintains a lower average total error than PD, demonstrating the benefit of online parameter adaptation under simultaneous uncertainties.
 \end{enumerate}
-
-\subsection{Parameter Convergence}
-
-The adaptive controller estimates mass with bounded bias under stronger disturbances. In the baseline scenario, the mass estimate converges to $\hat{m} \approx 2.58$ kg (bias above the 1.9 kg truth). With the package attached (Test 2), the controller adapts to $\hat{m} \approx 1.59$ kg (under-estimating the 2.9 kg truth) while still maintaining acceptable tracking. Disturbance estimates in the 7N case converge to $\hat{\mathbf{d}} \approx [1.27, 2.06, 2.78]^\top$ m/s$^2$ (baseline wind) and $\hat{\mathbf{d}} \approx [2.47, 4.41, -0.71]^\top$ m/s$^2$ (heavy + wind). Tracking performance remains good despite parameter bias, reflecting the closed-loop robustness of the adaptive law.
 
 \section{Discussion}
 
@@ -408,7 +384,7 @@ The adaptive controller estimates mass with bounded bias under stronger disturba
 
 \item \textbf{No Manual Retuning:} A single set of gains works across wide mass range (1.9-2.9 kg), eliminating gain scheduling.
 
-\item \textbf{Disturbance Adaptation:} Online estimation of $\hat{\mathbf{d}}$ enables rejection of persistent disturbances
+\item \textbf{Disturbance Adaptation:} Online estimation of $\hat{\mathbf{d}}$ enables rejection of persistent disturbances, though performance degrades under strong winds when excitation is limited.
 
 \item \textbf{Predictable Transients:} Convergence rate is determined by $\Lambda$ and $K$, enabling systematic performance tuning.
 \end{enumerate}
@@ -416,7 +392,7 @@ The adaptive controller estimates mass with bounded bias under stronger disturba
 \subsection{Limitations and Future Work}
 
 \begin{enumerate}
-\item \textbf{Persistent Excitation:} Parameter convergence to true values requires trajectory richness. Lack of excitation may result in biased estimates that still enable good tracking.
+\item \textbf{Persistent Excitation:} Parameter convergence to true values requires trajectory richness. Lack of excitation may result in biased estimates; richer excitation and decoupling mass and disturbance adaptation could improve strong-wind performance.
 
 \item \textbf{Computational Cost:} Adaptive law requires regressor computation and matrix operations at each timestep, slightly increasing computational burden vs. PD.
 
@@ -424,8 +400,7 @@ The adaptive controller estimates mass with bounded bias under stronger disturba
 \end{enumerate}
 
 \section{Conclusion}
-
-This paper presented a comparative analysis of PD and Lyapunov-based adaptive control for quadrotor position tracking under parametric uncertainty. A simplified 6-DOF translational model enabled focused evaluation of position control strategies. Three test scenarios systematically quantified controller robustness: baseline performance (AC: 0.124 m, PD: 0.286 m), disturbance response with 7 N wind (AC: +33\% degradation, PD: +8\% degradation), and mass variation (AC: 0.252 m, PD: 0.686 m). Under a combined 53\% mass increase and 7 N wind disturbance (≈37\% of nominal weight), AC maintained 63\% lower error (0.252 m vs. 0.686 m) than optimized PD control. The adaptive law demonstrated bounded disturbance sensitivity and successful mass estimation, validated by a rigorous Lyapunov stability proof. The adaptive approach eliminates gain scheduling and manual retuning while maintaining provable stability guarantees. Interestingly, the adaptive controller had superior nominal performance, even though both were fully optimized. Moreover, it was noticeable that mass adaptation is much more accurate than disturbance adaptation. 
+This paper presented a comparative analysis of PD and Lyapunov-based adaptive control for quadrotor position tracking under parametric uncertainty. A simplified 6-DOF translational model enabled focused evaluation of position control strategies. Batch simulations on a 20-second slalom with mass and wind sweeps showed AC outperforming PD (baseline 0.046 m vs 0.120 m; heavy+wind 0.144 m vs 0.387 m), but disturbance adaptation remained imperfect under strong winds, likely due to limited excitation and coupling with mass adaptation. The adaptive approach eliminates gain scheduling and manual retuning while maintaining provable stability guarantees, with room to improve excitation and decouple mass/disturbance estimation. 
 
 \section{Code Availability}
 

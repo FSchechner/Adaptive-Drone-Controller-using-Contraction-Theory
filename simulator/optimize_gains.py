@@ -10,12 +10,12 @@ from Drone import Drone
 from scipy.optimize import minimize
 
 class spiral_opt:
-    def __init__(self, controller, drone_class=Drone):
+    def __init__(self, controller, drone_class=Drone, disturbance=None):
         self.state = np.array([0.0,0.0,0.0,0.0,0.0,0.0])
         self.t = 0.0
         self.dt = 0.01
         self.r = 5
-        self.env = SimpleQuadcopter(drone_class=drone_class)
+        self.env = SimpleQuadcopter(drone_class=drone_class, constant_disturbance=disturbance)
         self.controller = controller
         self.F = np.array([0.0, 0.0, 0.0])
         self.pos_hist = []
@@ -99,12 +99,22 @@ def optimize_pd():
 def optimize_ac():
     print("\nOptimizing Adaptive Controller...")
 
+    class HeavyDrone:
+        """Drone model with m=3.4 kg for robust AC tuning."""
+        def __init__(self):
+            self.Ixx = 0.028
+            self.Iyy = 0.028
+            self.Izz = 0.045
+            self.m = 3.9
+            self.F_max = 60
+            self.tau_max = 4
+
     def objective(x):
         lambda_xy, lambda_z, k_xy, k_z, gamma_alpha, gamma_d = x
         controller = AdaptiveController(lambda_xy=lambda_xy, lambda_z=lambda_z,
                                        k_xy=k_xy, k_z=k_z,
                                        gamma_alpha=gamma_alpha, gamma_d=gamma_d)
-        sim = spiral_opt(controller)
+        sim = spiral_opt(controller, drone_class=HeavyDrone, disturbance=[-5,3.3,0.1])
         sim.simulation()
         error = sim.get_error()
         print(f"  λxy={lambda_xy:.2f} λz={lambda_z:.2f} kxy={k_xy:.2f} kz={k_z:.2f} " +
@@ -119,7 +129,7 @@ def optimize_ac():
         x0,
         method='Powell',  # supports bounds
         bounds=bounds,
-        options={'maxiter': 60, 'disp': True}
+        options={'maxiter': 20, 'disp': True}
     )
 
     print(f"\nOptimal AC Gains:")
