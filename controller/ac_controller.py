@@ -18,11 +18,6 @@ class AdaptiveController:
                  F_max=60.0,
                  dt=0.01):
 
-
- 
-
-  
-  
         self.m_nominal = m_nominal  # nominal mass used to seed α̂
         self.g = g  # gravity constant in the model
         self.dt = dt  # integration step (passed through the sim)
