@@ -69,7 +69,7 @@ class spiral:
         full_state = self.env.get_state()
         pos = full_state[0:3]
         vel = full_state[3:6]
-        F_des = self.pos_controller.compute_control(pos, vel, self.state[:3])
+        F_des = self.pos_controller.compute_control(pos, vel, self.state[:3], dt=self.dt)
 
         # Run 3 attitude control cycles at higher rate
         for i in range(3):

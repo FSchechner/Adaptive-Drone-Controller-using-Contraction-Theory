@@ -72,7 +72,7 @@ class spiral:
         state = self.env.step(self.F, self.dt)
         pos = state[:3]
         vel = state[3:]
-        self.F = self.controller.compute_control(pos, vel, pos_d, vel_d, acc_d)
+        self.F = self.controller.compute_control(pos, vel, pos_d, vel_d, acc_d, dt=self.dt)
         self.pos_hist.append(pos.copy())
         self.pos_d_hist.append(pos_d.copy())
 

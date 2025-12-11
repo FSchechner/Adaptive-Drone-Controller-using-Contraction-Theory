@@ -36,7 +36,7 @@ class spiral_opt:
         state = self.env.step(self.F, self.dt)
         pos = state[:3]
         vel = state[3:]
-        self.F = self.controller.compute_control(pos, vel, self.state[:3])
+        self.F = self.controller.compute_control(pos, vel, self.state[:3], dt=self.dt)
         self.pos_hist.append(pos.copy())
         self.pos_d_hist.append(self.state[:3])
 
@@ -77,8 +77,13 @@ def optimize_pd():
     x0 = [29.89, 5.75, 2.56, 6.96, 0.0, 0.0]
     bounds = [(1, 30), (1, 15), (1, 30), (1, 15), (0, 5), (0, 5)]
 
-    result = minimize(objective, x0, method='Nelder-Mead', bounds=bounds,
-                     options={'maxiter': 50, 'disp': True})
+    result = minimize(
+        objective,
+        x0,
+        method='Powell',  # supports bounds
+        bounds=bounds,
+        options={'maxiter': 60, 'disp': True}
+    )
 
     print(f"\nOptimal PD Gains:")
     print(f"  Kp_xy={result.x[0]:.4f}")
@@ -109,8 +114,13 @@ def optimize_ac():
     x0 = [3.0, 4.0, 5.0, 8.0, 1.5, 0.5]
     bounds = [(0.5, 10), (0.5, 10), (1, 15), (1, 15), (0.1, 5), (0.1, 2)]
 
-    result = minimize(objective, x0, method='Nelder-Mead', bounds=bounds,
-                     options={'maxiter': 50, 'disp': True})
+    result = minimize(
+        objective,
+        x0,
+        method='Powell',  # supports bounds
+        bounds=bounds,
+        options={'maxiter': 60, 'disp': True}
+    )
 
     print(f"\nOptimal AC Gains:")
     print(f"  lambda_xy={result.x[0]:.4f}")

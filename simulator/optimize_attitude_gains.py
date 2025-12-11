@@ -45,7 +45,7 @@ class spiral_opt:
         full_state = self.env.step(self.u, self.dt)
         pos = full_state[0:3]
         vel = full_state[3:6]
-        F_des = self.pos_controller.compute_control(pos, vel, self.state[:3])
+        F_des = self.pos_controller.compute_control(pos, vel, self.state[:3], dt=self.dt)
         self.u = self.att_controller.compute_control(F_des, full_state)
         self.pos_hist.append(pos.copy())
         self.pos_d_hist.append(self.state[:3])

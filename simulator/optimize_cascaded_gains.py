@@ -41,7 +41,7 @@ class spiral_opt:
         full_state = self.env.get_state()
         pos = full_state[0:3]
         vel = full_state[3:6]
-        F_des = self.pos_controller.compute_control(pos, vel, self.state[:3])
+        F_des = self.pos_controller.compute_control(pos, vel, self.state[:3], dt=self.dt)
 
         # Run attitude controller 3 times faster (dt/3)
         dt_att = self.dt / 3.0
